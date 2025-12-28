@@ -1,3 +1,24 @@
+A simple simulator for basic physics and circuits.
+
+Confession: the basic architecture was created by Claude Sonnet 4.5
+My first React application. I have tinkered with a plan for this application in a few different tech stacks. Including Java and Godot.
+I am glad to finally be making this a reality, though for it to be a reasonable simulator it has a long way to go!
+
+TODO:
+General:
+  host the simulators on a website
+  prepare examples of different situations
+  develop a sort of lesson curriculum
+Physics:
+  better gravity
+  collisions
+Circuits:
+  visible wires
+  able to move components
+  ensure correct circuit behavior
+
+
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
