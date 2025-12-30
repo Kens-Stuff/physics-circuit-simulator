@@ -8,6 +8,7 @@ import { Play, Pause, RotateCcw, Plus } from 'lucide-react';
 // ENTITY-COMPONENT PATTERN: Base entity that can have different components
 class Entity {
   constructor(id, type) {
+    console.log("Entity Constructor for a " + type);
     this.id = id;
     this.type = type;
     this.components = new Map();
@@ -30,6 +31,7 @@ class Entity {
 // Components for Entity-Component Pattern
 class TransformComponent {
   constructor(x, y, rotation = 0) {
+    console.log("creating a transform component");
     this.x = x;
     this.y = y;
     this.rotation = rotation;
@@ -37,7 +39,8 @@ class TransformComponent {
 }
 
 class PhysicsComponent {
-  constructor(mass, vx = 0, vy = 0) {
+  constructor(mass, vx = -50, vy = 0) {
+    console.log("creating a physics component");
     this.mass = mass;
     this.vx = vx;
     this.vy = vy;
@@ -46,8 +49,15 @@ class PhysicsComponent {
   }
 }
 
+class PhysicsCollisionComponent{
+  constructor(radius){
+    this.radius = radius;
+  }
+}
+
 class RenderComponent {
   constructor(shape, color, size) {
+    console.log("creating a render component");
     this.shape = shape; // 'circle', 'rect', 'line'
     this.color = color;
     this.size = size;
@@ -56,6 +66,7 @@ class RenderComponent {
 
 class CircuitComponent {
   constructor(componentType, value) {
+    console.log("Creating a circuit component");
     this.componentType = componentType; // 'resistor', 'battery', 'wire'
     this.value = value; // resistance in ohms, voltage in volts
     this.current = 0;
@@ -66,6 +77,7 @@ class CircuitComponent {
 
 // STRATEGY PATTERN: Different simulation strategies
 class SimulationStrategy {
+  //because this is sort of the 'abstract' super strategy, update only throws an error.
   update(entities, deltaTime) {
     throw new Error('Must implement update method');
   }
@@ -74,7 +86,11 @@ class SimulationStrategy {
 class PhysicsSimulationStrategy extends SimulationStrategy {
   constructor() {
     super();
-    this.gravity = 9.8;
+    this.gravity = 98;// 10x earth gravity, as position is calculated on pixel sized transformations.
+  }
+
+  collides(a, ar, b, br) {
+    return (Math.abs(b - a) < (ar + br));
   }
 
   update(entities, deltaTime) {
@@ -94,13 +110,33 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
       physics.vy += (physics.fy / physics.mass) * deltaTime;
 
       // Update position
-      transform.x += physics.vx * deltaTime;
+      transform.x += physics.vx * deltaTime
       transform.y += physics.vy * deltaTime;
 
+      // Simplified object collisions
+      entities.forEach(e => {
+        if(entity.id == e.id) {
+          return;
+        }
+        // if(collides(entity.transform.x, entity.render.radius, e.transform.x, e.render.radius) && collides(entity.transform.y, entity.render.radius, e.transform.y, e.render.radius)) {
+        //   //handle collision.
+        //   console.log("object to object collision detected");
+        // }
+      })
+
       // Simple ground collision
-      if (transform.y > 550) {
+      if (transform.y >= 550) {
         transform.y = 550;
-        physics.vy *= -0.8; // Bounce with energy loss
+        physics.vy *= -1; // Bounce with energy loss
+      }
+      // Simple wall collision
+      if (transform.x >= 500) {
+        transform.x = 500;
+        physics.vx *= -1; //Bounce off wall with no energy loss
+      }
+      if (transform.x <= 10) {
+        transform.x = 10;
+        physics.vx *= -1;
       }
 
       // Reset forces
@@ -430,8 +466,7 @@ export default function PhysicsCircuitSimulator() {
     if (!engineRef.current) return;
     
     if (mode === 'physics') {
-      const x = Math.random() * 600 + 100;
-      EntityFactory.createPhysicsObject(engineRef.current.repository, x, 50, Math.random() * 2 + 0.5);
+      EntityFactory.createPhysicsObject(engineRef.current.repository, Math.random() * 600 + 100, 50, Math.random() * 2 + 0.5);
     } else {
       const x = Math.random() * 400 + 200;
       EntityFactory.createCircuitResistor(engineRef.current.repository, x, 300, Math.random() * 200 + 50);
@@ -576,6 +611,23 @@ export default function PhysicsCircuitSimulator() {
       <div style={styles.controls}>
         <div style={styles.buttonGroup}>
           <button
+            onClick={() => handleModeChange('physics')}
+            style={{...styles.button, ...(mode === 'physics' ? styles.activeButton : styles.secondaryButton)}}
+          >
+            Physics Mode
+          </button>
+          <button
+            onClick={() => handleModeChange('circuit')}
+            style={{...styles.button, ...(mode === 'circuit' ? styles.activeButton : styles.secondaryButton)}}
+          >
+            Circuit Mode
+          </button>
+        </div>
+      </div>
+
+      <div style={styles.controls}>
+        <div style={styles.buttonGroup}>
+          <button
             onClick={handleTogglePlay}
             style={{...styles.button, ...styles.primaryButton}}
           >
@@ -598,20 +650,7 @@ export default function PhysicsCircuitSimulator() {
           </button>
         </div>
 
-        <div style={styles.buttonGroup}>
-          <button
-            onClick={() => handleModeChange('physics')}
-            style={{...styles.button, ...(mode === 'physics' ? styles.activeButton : styles.secondaryButton)}}
-          >
-            Physics Mode
-          </button>
-          <button
-            onClick={() => handleModeChange('circuit')}
-            style={{...styles.button, ...(mode === 'circuit' ? styles.activeButton : styles.secondaryButton)}}
-          >
-            Circuit Mode
-          </button>
-        </div>
+        
       </div>
 
       <div style={styles.infoPanel}>
@@ -633,7 +672,7 @@ export default function PhysicsCircuitSimulator() {
         </div>
       </div>
 
-      {/* Color Picker - Try this! */}
+      {/* Color Picker - Try this!
       <div style={styles.colorPicker}>
         <span style={styles.infoLabel}>Background Color: </span>
         <input
@@ -651,7 +690,7 @@ export default function PhysicsCircuitSimulator() {
           <button onClick={() => setBackgroundColor('#7f1d1d')} style={{marginLeft: '4px', padding: '4px 8px', backgroundColor: '#7f1d1d', color: '#9ca3af', border: 'none', borderRadius: '3px', cursor: 'pointer'}}>Red</button>
           <button onClick={() => setBackgroundColor('#111827')} style={{marginLeft: '4px', padding: '4px 8px', backgroundColor: '#111827', color: '#9ca3af', border: 'none', borderRadius: '3px', cursor: 'pointer'}}>Default</button>
         </div>
-      </div>
+      </div> */}
 
       <div style={styles.canvasContainer}>
         <canvas
