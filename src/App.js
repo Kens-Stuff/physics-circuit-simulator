@@ -38,6 +38,12 @@ class TransformComponent {
   }
 }
 
+class MobileByUserComponent {
+  constructor(selected = false) {
+    this.selected = false;
+  }
+}
+
 class PhysicsComponent {
   constructor(mass, vx = -50, vy = 0) {
     console.log("creating a physics component");
@@ -89,8 +95,78 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
     this.gravity = 98;// 10x earth gravity, as position is calculated on pixel sized transformations.
   }
 
-  collides(a, ar, b, br) {
-    return (Math.abs(b - a) < (ar + br));
+  collides(entityA, entityB) {
+    const transformA = entityA.getComponent('transform');
+    const transformB = entityB.getComponent('transform');
+    const tangibleA = entityA.getComponent('tangible');
+    const tangibleB = entityB.getComponent('tangible');
+
+    // Calculate distance between centers
+    const dx = transformB.x - transformA.x;
+    const dy = transformB.y - transformA.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Check if distance is less than sum of radii
+    return distance < (tangibleA.radius + tangibleB.radius);
+  }
+
+  // Collision response
+  resolveCollision(entityA, entityB) {
+    const transformA = entityA.getComponent('transform');
+    const transformB = entityB.getComponent('transform');
+    const physicsA = entityA.getComponent('physics');
+    const physicsB = entityB.getComponent('physics');
+    const tangibleA = entityA.getComponent('tangible');
+    const tangibleB = entityB.getComponent('tangible');
+
+    // Calculate collision normal (direction from A to B)
+    const dx = transformB.x - transformA.x;
+    const dy = transformB.y - transformA.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Avoid division by zero
+    if (distance === 0) return;
+
+    // Normalize the collision normal
+    const nx = dx / distance;
+    const ny = dy / distance;
+
+    // Separate the objects (push them apart)
+    const overlap = (tangibleA.radius + tangibleB.radius) - distance;
+    const separationX = nx * overlap * 0.5;
+    const separationY = ny * overlap * 0.5;
+
+    transformA.x -= separationX;
+    transformA.y -= separationY;
+    transformB.x += separationX;
+    transformB.y += separationY;
+
+    // Calculate relative velocity
+    const relativeVelocityX = physicsB.vx - physicsA.vx;
+    const relativeVelocityY = physicsB.vy - physicsA.vy;
+
+    // Calculate relative velocity along collision normal
+    const velocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
+
+    // Don't resolve if velocities are separating
+    if (velocityAlongNormal > 0) return;
+
+    // Calculate restitution (bounciness) - 1.0 = perfectly elastic
+    const restitution = 1.0;
+
+    // Calculate impulse scalar
+    const impulse = -(1 + restitution) * velocityAlongNormal;
+    const totalMass = physicsA.mass + physicsB.mass;
+    const impulseScalar = impulse / totalMass;
+
+    // Apply impulse to velocities
+    const impulseX = impulseScalar * nx;
+    const impulseY = impulseScalar * ny;
+
+    physicsA.vx -= impulseX * physicsB.mass;
+    physicsA.vy -= impulseY * physicsB.mass;
+    physicsB.vx += impulseX * physicsA.mass;
+    physicsB.vy += impulseY * physicsA.mass;
   }
 
   update(entities, deltaTime) {
@@ -114,15 +190,17 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
       transform.y += physics.vy * deltaTime;
 
       // Simplified object collisions
-      entities.forEach(e => {
-        if(entity.id == e.id) {
-          return;
-        }
-        // if(collides(entity.transform.x, entity.render.radius, e.transform.x, e.render.radius) && collides(entity.transform.y, entity.render.radius, e.transform.y, e.render.radius)) {
-        //   //handle collision.
-        //   console.log("object to object collision detected");
-        // }
-      })
+      if (entity.hasComponent('tangible')) {
+        entities.forEach(e => {
+          if(entity.id === e.id) {
+            return;
+          }
+          if(this.collides(entity, e)) {
+            //handle collision.
+            this.resolveCollision(entity, e);
+          }
+        })
+      }
 
       // Simple ground collision
       if (transform.y >= 550) {
@@ -282,7 +360,9 @@ class EntityFactory {
     return repo.create('physics')
       .addComponent('transform', new TransformComponent(x, y))
       .addComponent('physics', new PhysicsComponent(mass))
-      .addComponent('render', new RenderComponent('circle', '#3b82f6', 20));
+      .addComponent('render', new RenderComponent('circle', '#3b82f6', 20))
+      .addComponent('tangible', new PhysicsCollisionComponent(20))
+      .addComponent('draggable', new MobileByUserComponent(false));
   }
 
   static createCircuitResistor(repo, x, y, resistance) {
@@ -603,9 +683,6 @@ export default function PhysicsCircuitSimulator() {
  <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>Physics & Circuit Simulator</h1>
-        <p style={styles.subtitle}>
-          No Tailwind Version - Pure CSS
-        </p>
       </div>
 
       <div style={styles.controls}>
