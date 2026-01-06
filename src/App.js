@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Plus } from 'lucide-react';
 
+
+
 // ============================================================================
 // DOMAIN LAYER - Core Business Logic
 // ============================================================================
@@ -73,11 +75,21 @@ class RenderComponent {
 class CircuitComponent {
   constructor(componentType, value) {
     console.log("Creating a circuit component");
-    this.componentType = componentType; // 'resistor', 'battery', 'wire'
+    this.componentType = componentType; // 'resistor', 'battery'
     this.value = value; // resistance in ohms, voltage in volts
     this.current = 0;
     this.voltage = 0;
     this.connections = [];
+  }
+}
+
+class CircuitWireComponent {
+  constructor(start, end) {
+    console.log("creating a wire component");
+    this.startx = start.getComponent('transform').x;
+    this.starty = start.getComponent('transform').y;
+    this.endx = end.getComponent('transform').x;
+    this.endy = end.getComponent('transform').y;
   }
 }
 
@@ -378,6 +390,14 @@ class EntityFactory {
       .addComponent('circuit', new CircuitComponent('battery', voltage))
       .addComponent('render', new RenderComponent('rect', '#22c55e', 40));
   }
+
+   static createCircuitWire(repo, start, end) {
+    return repo.create('circuit')
+      .addComponent('transform', new TransformComponent(50, 50))
+      .addComponent('render', new RenderComponent('line', '#7fe0dcff', 5))
+      .addComponent('wire', new CircuitWireComponent(start, end));
+  }
+
 }
 
 // ============================================================================
@@ -442,6 +462,16 @@ class CanvasRenderer {
           
           this.ctx.fillText(`${circuit.current.toFixed(2)}A`, transform.x, transform.y - 25);
         }
+      } else if (render.shape === 'line') {
+        const con = entity.getComponent('wire');
+
+        this.ctx.beginPath();
+
+        this.ctx.moveTo(con.startx, con.starty);
+        this.ctx.lineTo(con.endx, con.endy);
+
+        this.ctx.stroke();
+
       }
     });
   }
@@ -479,9 +509,21 @@ export default function PhysicsCircuitSimulator() {
       EntityFactory.createPhysicsObject(engineRef.current.repository, 200, 50, 1);
       EntityFactory.createPhysicsObject(engineRef.current.repository, 400, 100, 2);
     } else {
-      EntityFactory.createCircuitBattery(engineRef.current.repository, 150, 300, 9);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 300, 300, 100);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 450, 300, 200);
+      EntityFactory.createCircuitBattery(engineRef.current.repository, 50, 300, 9);
+      EntityFactory.createCircuitResistor(engineRef.current.repository, 150, 300, 100);
+      EntityFactory.createCircuitResistor(engineRef.current.repository, 250, 300, 200);
+      
+      let a = null;
+      let b = null;
+
+      engineRef.current.repository.findByType("circuit").forEach(entity => {
+        b = entity;
+        if (a != null) {
+          EntityFactory.createCircuitWire(engineRef.current.repository, a, b);
+        }
+        a = b;
+      })
+      
     }
     
     setEntityCount(engineRef.current.repository.getAll().length);
@@ -533,9 +575,21 @@ export default function PhysicsCircuitSimulator() {
       EntityFactory.createPhysicsObject(engineRef.current.repository, 200, 50, 1);
       EntityFactory.createPhysicsObject(engineRef.current.repository, 400, 100, 2);
     } else {
-      EntityFactory.createCircuitBattery(engineRef.current.repository, 150, 300, 9);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 300, 300, 100);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 450, 300, 200);
+      EntityFactory.createCircuitBattery(engineRef.current.repository, 50, 300, 9);
+      EntityFactory.createCircuitResistor(engineRef.current.repository, 150, 300, 100);
+      EntityFactory.createCircuitResistor(engineRef.current.repository, 250, 300, 200);
+      
+      let a = null;
+      let b = null;
+
+      engineRef.current.repository.findByType("circuit").forEach(entity => {
+        b = entity;
+        if (a != null) {
+          EntityFactory.createCircuitWire(engineRef.current.repository, a, b);
+        }
+        a = b;
+      })
+      
     }
     
     setEntityCount(engineRef.current.repository.getAll().length);
