@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Plus } from 'lucide-react';
 
+
+
 // ============================================================================
 // DOMAIN LAYER - Core Business Logic
 // ============================================================================
@@ -38,6 +40,12 @@ class TransformComponent {
   }
 }
 
+class MobileByUserComponent {
+  constructor(selected = false) {
+    this.selected = false;
+  }
+}
+
 class PhysicsComponent {
   constructor(mass, vx = -50, vy = 0) {
     console.log("creating a physics component");
@@ -67,11 +75,21 @@ class RenderComponent {
 class CircuitComponent {
   constructor(componentType, value) {
     console.log("Creating a circuit component");
-    this.componentType = componentType; // 'resistor', 'battery', 'wire'
+    this.componentType = componentType; // 'resistor', 'battery'
     this.value = value; // resistance in ohms, voltage in volts
     this.current = 0;
     this.voltage = 0;
     this.connections = [];
+  }
+}
+
+class CircuitWireComponent {
+  constructor(start, end) {
+    console.log("creating a wire component");
+    this.startx = start.getComponent('transform').x;
+    this.starty = start.getComponent('transform').y;
+    this.endx = end.getComponent('transform').x;
+    this.endy = end.getComponent('transform').y;
   }
 }
 
@@ -89,8 +107,78 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
     this.gravity = 98;// 10x earth gravity, as position is calculated on pixel sized transformations.
   }
 
-  collides(a, ar, b, br) {
-    return (Math.abs(b - a) < (ar + br));
+  collides(entityA, entityB) {
+    const transformA = entityA.getComponent('transform');
+    const transformB = entityB.getComponent('transform');
+    const tangibleA = entityA.getComponent('tangible');
+    const tangibleB = entityB.getComponent('tangible');
+
+    // Calculate distance between centers
+    const dx = transformB.x - transformA.x;
+    const dy = transformB.y - transformA.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Check if distance is less than sum of radii
+    return distance < (tangibleA.radius + tangibleB.radius);
+  }
+
+  // Collision response
+  resolveCollision(entityA, entityB) {
+    const transformA = entityA.getComponent('transform');
+    const transformB = entityB.getComponent('transform');
+    const physicsA = entityA.getComponent('physics');
+    const physicsB = entityB.getComponent('physics');
+    const tangibleA = entityA.getComponent('tangible');
+    const tangibleB = entityB.getComponent('tangible');
+
+    // Calculate collision normal (direction from A to B)
+    const dx = transformB.x - transformA.x;
+    const dy = transformB.y - transformA.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Avoid division by zero
+    if (distance === 0) return;
+
+    // Normalize the collision normal
+    const nx = dx / distance;
+    const ny = dy / distance;
+
+    // Separate the objects (push them apart)
+    const overlap = (tangibleA.radius + tangibleB.radius) - distance;
+    const separationX = nx * overlap * 0.5;
+    const separationY = ny * overlap * 0.5;
+
+    transformA.x -= separationX;
+    transformA.y -= separationY;
+    transformB.x += separationX;
+    transformB.y += separationY;
+
+    // Calculate relative velocity
+    const relativeVelocityX = physicsB.vx - physicsA.vx;
+    const relativeVelocityY = physicsB.vy - physicsA.vy;
+
+    // Calculate relative velocity along collision normal
+    const velocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
+
+    // Don't resolve if velocities are separating
+    if (velocityAlongNormal > 0) return;
+
+    // Calculate restitution (bounciness) - 1.0 = perfectly elastic
+    const restitution = 1.0;
+
+    // Calculate impulse scalar
+    const impulse = -(1 + restitution) * velocityAlongNormal;
+    const totalMass = physicsA.mass + physicsB.mass;
+    const impulseScalar = impulse / totalMass;
+
+    // Apply impulse to velocities
+    const impulseX = impulseScalar * nx;
+    const impulseY = impulseScalar * ny;
+
+    physicsA.vx -= impulseX * physicsB.mass;
+    physicsA.vy -= impulseY * physicsB.mass;
+    physicsB.vx += impulseX * physicsA.mass;
+    physicsB.vy += impulseY * physicsA.mass;
   }
 
   update(entities, deltaTime) {
@@ -114,15 +202,17 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
       transform.y += physics.vy * deltaTime;
 
       // Simplified object collisions
-      entities.forEach(e => {
-        if(entity.id == e.id) {
-          return;
-        }
-        // if(collides(entity.transform.x, entity.render.radius, e.transform.x, e.render.radius) && collides(entity.transform.y, entity.render.radius, e.transform.y, e.render.radius)) {
-        //   //handle collision.
-        //   console.log("object to object collision detected");
-        // }
-      })
+      if (entity.hasComponent('tangible')) {
+        entities.forEach(e => {
+          if(entity.id === e.id) {
+            return;
+          }
+          if(this.collides(entity, e)) {
+            //handle collision.
+            this.resolveCollision(entity, e);
+          }
+        })
+      }
 
       // Simple ground collision
       if (transform.y >= 550) {
@@ -282,7 +372,9 @@ class EntityFactory {
     return repo.create('physics')
       .addComponent('transform', new TransformComponent(x, y))
       .addComponent('physics', new PhysicsComponent(mass))
-      .addComponent('render', new RenderComponent('circle', '#3b82f6', 20));
+      .addComponent('render', new RenderComponent('circle', '#3b82f6', 20))
+      .addComponent('tangible', new PhysicsCollisionComponent(20))
+      .addComponent('draggable', new MobileByUserComponent(false));
   }
 
   static createCircuitResistor(repo, x, y, resistance) {
@@ -298,6 +390,14 @@ class EntityFactory {
       .addComponent('circuit', new CircuitComponent('battery', voltage))
       .addComponent('render', new RenderComponent('rect', '#22c55e', 40));
   }
+
+   static createCircuitWire(repo, start, end) {
+    return repo.create('circuit')
+      .addComponent('transform', new TransformComponent(50, 50))
+      .addComponent('render', new RenderComponent('line', '#7fe0dcff', 5))
+      .addComponent('wire', new CircuitWireComponent(start, end));
+  }
+
 }
 
 // ============================================================================
@@ -362,6 +462,16 @@ class CanvasRenderer {
           
           this.ctx.fillText(`${circuit.current.toFixed(2)}A`, transform.x, transform.y - 25);
         }
+      } else if (render.shape === 'line') {
+        const con = entity.getComponent('wire');
+
+        this.ctx.beginPath();
+
+        this.ctx.moveTo(con.startx, con.starty);
+        this.ctx.lineTo(con.endx, con.endy);
+
+        this.ctx.stroke();
+
       }
     });
   }
@@ -399,9 +509,21 @@ export default function PhysicsCircuitSimulator() {
       EntityFactory.createPhysicsObject(engineRef.current.repository, 200, 50, 1);
       EntityFactory.createPhysicsObject(engineRef.current.repository, 400, 100, 2);
     } else {
-      EntityFactory.createCircuitBattery(engineRef.current.repository, 150, 300, 9);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 300, 300, 100);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 450, 300, 200);
+      EntityFactory.createCircuitBattery(engineRef.current.repository, 50, 300, 9);
+      EntityFactory.createCircuitResistor(engineRef.current.repository, 150, 300, 100);
+      EntityFactory.createCircuitResistor(engineRef.current.repository, 250, 300, 200);
+      
+      let a = null;
+      let b = null;
+
+      engineRef.current.repository.findByType("circuit").forEach(entity => {
+        b = entity;
+        if (a != null) {
+          EntityFactory.createCircuitWire(engineRef.current.repository, a, b);
+        }
+        a = b;
+      })
+      
     }
     
     setEntityCount(engineRef.current.repository.getAll().length);
@@ -453,9 +575,21 @@ export default function PhysicsCircuitSimulator() {
       EntityFactory.createPhysicsObject(engineRef.current.repository, 200, 50, 1);
       EntityFactory.createPhysicsObject(engineRef.current.repository, 400, 100, 2);
     } else {
-      EntityFactory.createCircuitBattery(engineRef.current.repository, 150, 300, 9);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 300, 300, 100);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 450, 300, 200);
+      EntityFactory.createCircuitBattery(engineRef.current.repository, 50, 300, 9);
+      EntityFactory.createCircuitResistor(engineRef.current.repository, 150, 300, 100);
+      EntityFactory.createCircuitResistor(engineRef.current.repository, 250, 300, 200);
+      
+      let a = null;
+      let b = null;
+
+      engineRef.current.repository.findByType("circuit").forEach(entity => {
+        b = entity;
+        if (a != null) {
+          EntityFactory.createCircuitWire(engineRef.current.repository, a, b);
+        }
+        a = b;
+      })
+      
     }
     
     setEntityCount(engineRef.current.repository.getAll().length);
@@ -603,9 +737,6 @@ export default function PhysicsCircuitSimulator() {
  <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>Physics & Circuit Simulator</h1>
-        <p style={styles.subtitle}>
-          No Tailwind Version - Pure CSS
-        </p>
       </div>
 
       <div style={styles.controls}>
