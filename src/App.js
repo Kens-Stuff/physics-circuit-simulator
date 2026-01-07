@@ -33,7 +33,7 @@ class Entity {
 // Components for Entity-Component Pattern
 class TransformComponent {
   constructor(x, y, rotation = 0) {
-    console.log("creating a transform component");
+    //console.log("creating a transform component");
     this.x = x;
     this.y = y;
     this.rotation = rotation;
@@ -48,7 +48,7 @@ class MobileByUserComponent {
 
 class PhysicsComponent {
   constructor(mass, vx = -50, vy = 0) {
-    console.log("creating a physics component");
+    //console.log("creating a physics component");
     this.mass = mass;
     this.vx = vx;
     this.vy = vy;
@@ -65,7 +65,7 @@ class PhysicsCollisionComponent{
 
 class RenderComponent {
   constructor(shape, color, size) {
-    console.log("creating a render component");
+    //console.log("creating a render component");
     this.shape = shape; // 'circle', 'rect', 'line'
     this.color = color;
     this.size = size;
@@ -74,7 +74,7 @@ class RenderComponent {
 
 class CircuitComponent {
   constructor(componentType, value) {
-    console.log("Creating a circuit component");
+    console.log("Creating a " + componentType);
     this.componentType = componentType; // 'resistor', 'battery'
     this.value = value; // resistance in ohms, voltage in volts
     this.current = 0;
@@ -101,12 +101,15 @@ class SimulationStrategy {
   }
 }
 
+//TODO: make gravity an aspect of the simulation that can be turned on or off.
 class PhysicsSimulationStrategy extends SimulationStrategy {
   constructor() {
     super();
     this.gravity = 98;// 10x earth gravity, as position is calculated on pixel sized transformations.
+    console.log("Physics Simulator Strategy constructor");
   }
 
+  // Determines if two entities are colliding
   collides(entityA, entityB) {
     const transformA = entityA.getComponent('transform');
     const transformB = entityB.getComponent('transform');
@@ -220,8 +223,8 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
         physics.vy *= -1; // Bounce with energy loss
       }
       // Simple wall collision
-      if (transform.x >= 500) {
-        transform.x = 500;
+      if (transform.x >= 800) {
+        transform.x = 800;
         physics.vx *= -1; //Bounce off wall with no energy loss
       }
       if (transform.x <= 10) {
@@ -237,6 +240,11 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
 }
 
 class CircuitSimulationStrategy extends SimulationStrategy {
+  constructor(){
+    super();
+    console.log("circuit simulator constructor");
+  }
+
   update(entities, deltaTime) {
     // Simple series circuit solver using Ohm's Law
     let totalVoltage = 0;
@@ -279,6 +287,7 @@ class CircuitSimulationStrategy extends SimulationStrategy {
 // REPOSITORY PATTERN: Manages entity persistence and retrieval
 class EntityRepository {
   constructor() {
+    console.log("creating entity repository");
     this.entities = new Map();
     this.nextId = 1;
   }
@@ -314,6 +323,7 @@ class EntityRepository {
 // OBSERVER PATTERN: Simulation engine notifies observers of state changes
 class SimulationEngine {
   constructor(strategy) {
+    console.log("constructing Simulation Engine. Strategy: " + strategy);
     this.strategy = strategy;
     this.repository = new EntityRepository();
     this.observers = [];
@@ -353,16 +363,19 @@ class SimulationEngine {
   start() {
     this.isRunning = true;
     this.lastTime = Date.now();
+    console.log("Simulation started");
   }
 
   pause() {
     this.isRunning = false;
+    console.log("simulation paused");
   }
 
   reset() {
     this.pause();
     this.repository.clear();
     this.notifyObservers();
+    console.log("Simulation reset");
   }
 }
 
@@ -400,6 +413,43 @@ class EntityFactory {
 
 }
 
+// Initialization pre-sets. Strategy Pattern.
+// These only declare the starter entities.
+// TODO: create controls and multiple setups for different 'levels' or lessons.
+class LevelSetup {
+  initialize() {
+    throw new Error('Must implement initialize method');
+  }
+}
+
+class BasicPhysicsSetup extends LevelSetup {
+  initialize(repo) {
+    console.log("Creating starter entities for basic physics");
+    EntityFactory.createPhysicsObject(repo, 200, 50, 1);
+    EntityFactory.createPhysicsObject(repo, 400, 100, 2);
+  }
+}
+
+class BasicCircuitSetup extends LevelSetup {
+  initialize(repo) {
+    console.log("Creating starter entities for basic circuit");
+    EntityFactory.createCircuitBattery(repo, 50, 300, 9);
+    EntityFactory.createCircuitResistor(repo, 150, 300, 100);
+    EntityFactory.createCircuitResistor(repo, 250, 300, 200);
+      
+    let a = null;
+    let b = null;
+
+    repo.findByType("circuit").forEach(entity => {
+      b = entity;
+      if (a != null) {
+        EntityFactory.createCircuitWire(repo, a, b);
+      }
+      a = b;
+    })
+  }
+}
+
 // ============================================================================
 // PRESENTATION LAYER - UI Components
 // ============================================================================
@@ -407,6 +457,7 @@ class EntityFactory {
 // Renderer component - OBSERVER PATTERN: observes simulation state
 class CanvasRenderer {
   constructor(canvas) {
+    console.log("creating a canvas");
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
   }
@@ -419,6 +470,7 @@ class CanvasRenderer {
 
   clear() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    //console.log("canvas has been cleared");
   }
 
   render(entities) {
@@ -483,6 +535,7 @@ export default function PhysicsCircuitSimulator() {
   const engineRef = useRef(null);
   const rendererRef = useRef(null);
   const animationRef = useRef(null);
+  const setupRef = useRef(null);
 
   //State Variables
   const [mode, setMode] = useState('physics'); // 'physics' or 'circuit'
@@ -504,27 +557,14 @@ export default function PhysicsCircuitSimulator() {
     // OBSERVER PATTERN: Register renderer as observer
     engineRef.current.addObserver(rendererRef.current);
     
-    // Add initial entities
-    if (mode === 'physics') {
-      EntityFactory.createPhysicsObject(engineRef.current.repository, 200, 50, 1);
-      EntityFactory.createPhysicsObject(engineRef.current.repository, 400, 100, 2);
-    } else {
-      EntityFactory.createCircuitBattery(engineRef.current.repository, 50, 300, 9);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 150, 300, 100);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 250, 300, 200);
-      
-      let a = null;
-      let b = null;
+    // Get setup object
+    // TODO: improved modularity by sending mode to a factory that will return the right LevelSetup
+    setupRef.current = mode === 'physics'
+      ? new BasicPhysicsSetup()
+      : new BasicCircuitSetup();
 
-      engineRef.current.repository.findByType("circuit").forEach(entity => {
-        b = entity;
-        if (a != null) {
-          EntityFactory.createCircuitWire(engineRef.current.repository, a, b);
-        }
-        a = b;
-      })
-      
-    }
+    // Add initial entities, using strategy pattern
+    setupRef.current.initialize(engineRef.current.repository);
     
     setEntityCount(engineRef.current.repository.getAll().length);
     rendererRef.current.render(engineRef.current.repository.getAll());
@@ -571,27 +611,14 @@ export default function PhysicsCircuitSimulator() {
     engineRef.current?.reset();
     
     // Re-add initial entities
-    if (mode === 'physics') {
-      EntityFactory.createPhysicsObject(engineRef.current.repository, 200, 50, 1);
-      EntityFactory.createPhysicsObject(engineRef.current.repository, 400, 100, 2);
-    } else {
-      EntityFactory.createCircuitBattery(engineRef.current.repository, 50, 300, 9);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 150, 300, 100);
-      EntityFactory.createCircuitResistor(engineRef.current.repository, 250, 300, 200);
-      
-      let a = null;
-      let b = null;
-
-      engineRef.current.repository.findByType("circuit").forEach(entity => {
-        b = entity;
-        if (a != null) {
-          EntityFactory.createCircuitWire(engineRef.current.repository, a, b);
-        }
-        a = b;
-      })
-      
-    }
+    // Get setup object
+    setupRef.current = mode === 'physics'
+      ? new BasicPhysicsSetup()
+      : new BasicCircuitSetup();
     
+    // Add initial entities, using strategy pattern
+    setupRef.current.initialize(engineRef.current.repository);
+
     setEntityCount(engineRef.current.repository.getAll().length);
     rendererRef.current?.render(engineRef.current.repository.getAll());
   };
@@ -613,9 +640,9 @@ export default function PhysicsCircuitSimulator() {
   };
 
   const handleModeChange = (newMode) => {
-    handleReset();
     setIsRunning(false);
     setMode(newMode);
+    handleReset();
   };
 
   // Inline styles
