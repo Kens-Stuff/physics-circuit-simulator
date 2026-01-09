@@ -1,284 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Plus } from 'lucide-react';
-
-
+import {BasicPhysicsSetup, PhysicsLevels, BasicCircuitSetup, CircuitLevels} from './levels.js';
+import {Entity, EntityFactory} from './factory.js';
+import {SimulationStrategy, PhysicsSimulationStrategy, CircuitSimulationStrategy} from './strats.js';
 
 // ============================================================================
 // DOMAIN LAYER - Core Business Logic
 // ============================================================================
 
 // ENTITY-COMPONENT PATTERN: Base entity that can have different components
-class Entity {
-  constructor(id, type) {
-    console.log("Entity Constructor for a " + type);
-    this.id = id;
-    this.type = type;
-    this.components = new Map();
-  }
-
-  addComponent(name, component) {
-    this.components.set(name, component);
-    return this;
-  }
-
-  getComponent(name) {
-    return this.components.get(name);
-  }
-
-  hasComponent(name) {
-    return this.components.has(name);
-  }
-}
-
-// Components for Entity-Component Pattern
-class TransformComponent {
-  constructor(x, y, rotation = 0) {
-    //console.log("creating a transform component");
-    this.x = x;
-    this.y = y;
-    this.rotation = rotation;
-  }
-}
-
-class MobileByUserComponent {
-  constructor(selected = false) {
-    this.selected = false;
-  }
-}
-
-class PhysicsComponent {
-  constructor(mass, vx = -50, vy = 0) {
-    //console.log("creating a physics component");
-    this.mass = mass;
-    this.vx = vx;
-    this.vy = vy;
-    this.fx = 0;
-    this.fy = 0;
-  }
-}
-
-class PhysicsCollisionComponent{
-  constructor(radius){
-    this.radius = radius;
-  }
-}
-
-class RenderComponent {
-  constructor(shape, color, size) {
-    //console.log("creating a render component");
-    this.shape = shape; // 'circle', 'rect', 'line'
-    this.color = color;
-    this.size = size;
-  }
-}
-
-class CircuitComponent {
-  constructor(componentType, value) {
-    console.log("Creating a " + componentType);
-    this.componentType = componentType; // 'resistor', 'battery'
-    this.value = value; // resistance in ohms, voltage in volts
-    this.current = 0;
-    this.voltage = 0;
-    this.connections = [];
-  }
-}
-
-class CircuitWireComponent {
-  constructor(start, end) {
-    console.log("creating a wire component");
-    this.startx = start.getComponent('transform').x;
-    this.starty = start.getComponent('transform').y;
-    this.endx = end.getComponent('transform').x;
-    this.endy = end.getComponent('transform').y;
-  }
-}
+//ENTITY AND COMPONENT DEFINITIONS LOCATED IN 'factory.js'
 
 // STRATEGY PATTERN: Different simulation strategies
-class SimulationStrategy {
-  //because this is sort of the 'abstract' super strategy, update only throws an error.
-  update(entities, deltaTime) {
-    throw new Error('Must implement update method');
-  }
-}
-
-//TODO: make gravity an aspect of the simulation that can be turned on or off.
-class PhysicsSimulationStrategy extends SimulationStrategy {
-  constructor() {
-    super();
-    this.gravity = 98;// 10x earth gravity, as position is calculated on pixel sized transformations.
-    console.log("Physics Simulator Strategy constructor");
-  }
-
-  // Determines if two entities are colliding
-  collides(entityA, entityB) {
-    const transformA = entityA.getComponent('transform');
-    const transformB = entityB.getComponent('transform');
-    const tangibleA = entityA.getComponent('tangible');
-    const tangibleB = entityB.getComponent('tangible');
-
-    // Calculate distance between centers
-    const dx = transformB.x - transformA.x;
-    const dy = transformB.y - transformA.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Check if distance is less than sum of radii
-    return distance < (tangibleA.radius + tangibleB.radius);
-  }
-
-  // Collision response
-  resolveCollision(entityA, entityB) {
-    const transformA = entityA.getComponent('transform');
-    const transformB = entityB.getComponent('transform');
-    const physicsA = entityA.getComponent('physics');
-    const physicsB = entityB.getComponent('physics');
-    const tangibleA = entityA.getComponent('tangible');
-    const tangibleB = entityB.getComponent('tangible');
-
-    // Calculate collision normal (direction from A to B)
-    const dx = transformB.x - transformA.x;
-    const dy = transformB.y - transformA.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Avoid division by zero
-    if (distance === 0) return;
-
-    // Normalize the collision normal
-    const nx = dx / distance;
-    const ny = dy / distance;
-
-    // Separate the objects (push them apart)
-    const overlap = (tangibleA.radius + tangibleB.radius) - distance;
-    const separationX = nx * overlap * 0.5;
-    const separationY = ny * overlap * 0.5;
-
-    transformA.x -= separationX;
-    transformA.y -= separationY;
-    transformB.x += separationX;
-    transformB.y += separationY;
-
-    // Calculate relative velocity
-    const relativeVelocityX = physicsB.vx - physicsA.vx;
-    const relativeVelocityY = physicsB.vy - physicsA.vy;
-
-    // Calculate relative velocity along collision normal
-    const velocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
-
-    // Don't resolve if velocities are separating
-    if (velocityAlongNormal > 0) return;
-
-    // Calculate restitution (bounciness) - 1.0 = perfectly elastic
-    const restitution = 1.0;
-
-    // Calculate impulse scalar
-    const impulse = -(1 + restitution) * velocityAlongNormal;
-    const totalMass = physicsA.mass + physicsB.mass;
-    const impulseScalar = impulse / totalMass;
-
-    // Apply impulse to velocities
-    const impulseX = impulseScalar * nx;
-    const impulseY = impulseScalar * ny;
-
-    physicsA.vx -= impulseX * physicsB.mass;
-    physicsA.vy -= impulseY * physicsB.mass;
-    physicsB.vx += impulseX * physicsA.mass;
-    physicsB.vy += impulseY * physicsA.mass;
-  }
-
-  update(entities, deltaTime) {
-    entities.forEach(entity => {
-      if (!entity.hasComponent('physics') || !entity.hasComponent('transform')) {
-        return;
-      }
-
-      const physics = entity.getComponent('physics');
-      const transform = entity.getComponent('transform');
-
-      // Apply gravity
-      physics.fy += physics.mass * this.gravity;
-
-      // Update velocity
-      physics.vx += (physics.fx / physics.mass) * deltaTime;
-      physics.vy += (physics.fy / physics.mass) * deltaTime;
-
-      // Update position
-      transform.x += physics.vx * deltaTime
-      transform.y += physics.vy * deltaTime;
-
-      // Simplified object collisions
-      if (entity.hasComponent('tangible')) {
-        entities.forEach(e => {
-          if(entity.id === e.id) {
-            return;
-          }
-          if(this.collides(entity, e)) {
-            //handle collision.
-            this.resolveCollision(entity, e);
-          }
-        })
-      }
-
-      // Simple ground collision
-      if (transform.y >= 550) {
-        transform.y = 550;
-        physics.vy *= -1; // Bounce with energy loss
-      }
-      // Simple wall collision
-      if (transform.x >= 800) {
-        transform.x = 800;
-        physics.vx *= -1; //Bounce off wall with no energy loss
-      }
-      if (transform.x <= 10) {
-        transform.x = 10;
-        physics.vx *= -1;
-      }
-
-      // Reset forces
-      physics.fx = 0;
-      physics.fy = 0;
-    });
-  }
-}
-
-class CircuitSimulationStrategy extends SimulationStrategy {
-  constructor(){
-    super();
-    console.log("circuit simulator constructor");
-  }
-
-  update(entities, deltaTime) {
-    // Simple series circuit solver using Ohm's Law
-    let totalVoltage = 0;
-    let totalResistance = 0;
-
-    entities.forEach(entity => {
-      if (!entity.hasComponent('circuit')) return;
-      
-      const circuit = entity.getComponent('circuit');
-      
-      if (circuit.componentType === 'battery') {
-        totalVoltage += circuit.value;
-      } else if (circuit.componentType === 'resistor') {
-        totalResistance += circuit.value;
-      }
-    });
-
-    // Calculate current: I = V / R
-    const current = totalResistance > 0 ? totalVoltage / totalResistance : 0;
-
-    // Update each component
-    entities.forEach(entity => {
-      if (!entity.hasComponent('circuit')) return;
-      
-      const circuit = entity.getComponent('circuit');
-      circuit.current = current;
-      
-      if (circuit.componentType === 'resistor') {
-        // V = I * R
-        circuit.voltage = current * circuit.value;
-      }
-    });
-  }
-}
+// RELOCATED TO 'strats.js'
 
 // ============================================================================
 // APPLICATION LAYER - Orchestration and Control
@@ -380,75 +114,10 @@ class SimulationEngine {
 }
 
 // Factory functions to create common entities
-class EntityFactory {
-  static createPhysicsObject(repo, x, y, mass = 1) {
-    return repo.create('physics')
-      .addComponent('transform', new TransformComponent(x, y))
-      .addComponent('physics', new PhysicsComponent(mass))
-      .addComponent('render', new RenderComponent('circle', '#3b82f6', 20))
-      .addComponent('tangible', new PhysicsCollisionComponent(20))
-      .addComponent('draggable', new MobileByUserComponent(false));
-  }
-
-  static createCircuitResistor(repo, x, y, resistance) {
-    return repo.create('circuit')
-      .addComponent('transform', new TransformComponent(x, y))
-      .addComponent('circuit', new CircuitComponent('resistor', resistance))
-      .addComponent('render', new RenderComponent('rect', '#ef4444', 40));
-  }
-
-  static createCircuitBattery(repo, x, y, voltage) {
-    return repo.create('circuit')
-      .addComponent('transform', new TransformComponent(x, y))
-      .addComponent('circuit', new CircuitComponent('battery', voltage))
-      .addComponent('render', new RenderComponent('rect', '#22c55e', 40));
-  }
-
-   static createCircuitWire(repo, start, end) {
-    return repo.create('circuit')
-      .addComponent('transform', new TransformComponent(50, 50))
-      .addComponent('render', new RenderComponent('line', '#7fe0dcff', 5))
-      .addComponent('wire', new CircuitWireComponent(start, end));
-  }
-
-}
+//FACTORY NOW LOCATED IN 'factory.js'
 
 // Initialization pre-sets. Strategy Pattern.
-// These only declare the starter entities.
-// TODO: create controls and multiple setups for different 'levels' or lessons.
-class LevelSetup {
-  initialize() {
-    throw new Error('Must implement initialize method');
-  }
-}
-
-class BasicPhysicsSetup extends LevelSetup {
-  initialize(repo) {
-    console.log("Creating starter entities for basic physics");
-    EntityFactory.createPhysicsObject(repo, 200, 50, 1);
-    EntityFactory.createPhysicsObject(repo, 400, 100, 2);
-  }
-}
-
-class BasicCircuitSetup extends LevelSetup {
-  initialize(repo) {
-    console.log("Creating starter entities for basic circuit");
-    EntityFactory.createCircuitBattery(repo, 50, 300, 9);
-    EntityFactory.createCircuitResistor(repo, 150, 300, 100);
-    EntityFactory.createCircuitResistor(repo, 250, 300, 200);
-      
-    let a = null;
-    let b = null;
-
-    repo.findByType("circuit").forEach(entity => {
-      b = entity;
-      if (a != null) {
-        EntityFactory.createCircuitWire(repo, a, b);
-      }
-      a = b;
-    })
-  }
-}
+// PRE-SETS NOW LOCATED IN 'levels.js'
 
 // ============================================================================
 // PRESENTATION LAYER - UI Components
@@ -538,11 +207,12 @@ export default function PhysicsCircuitSimulator() {
   const setupRef = useRef(null);
 
   //State Variables
-  const [mode, setMode] = useState('physics'); // 'physics' or 'circuit'
+  const [mode, setMode] = useState('physics'); // 'physics' or 'circuit', physics is default.
   const [isRunning, setIsRunning] = useState(false);
   const [entityCount, setEntityCount] = useState(0);
   const [backgroundColor, setBackgroundColor] = useState('#111827');
-
+  const [levelOptions, setLevelOptions] = useState(mode === 'physics' ? PhysicsLevels : CircuitLevels);
+  const [currLevel, setCurrLevel] = useState(1);
 
   // Initialize simulation engine
   useEffect(() => {
@@ -642,8 +312,13 @@ export default function PhysicsCircuitSimulator() {
   const handleModeChange = (newMode) => {
     setIsRunning(false);
     setMode(newMode);
+    setLevelOptions(newMode === 'physics' ? PhysicsLevels : CircuitLevels)
     handleReset();
   };
+
+  const handleLevelChange = (event) => {
+    setCurrLevel(event.target.value);
+  }
 
   // Inline styles
   const styles = {
@@ -780,6 +455,9 @@ export default function PhysicsCircuitSimulator() {
           >
             Circuit Mode
           </button>
+          <select value={currLevel} onChange={handleLevelChange}>
+            {levelOptions.map((l) => <option>{l}</option>)}
+          </select>
         </div>
       </div>
 
