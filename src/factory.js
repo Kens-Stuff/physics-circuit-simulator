@@ -20,6 +20,16 @@ class Entity {
   hasComponent(name) {
     return this.components.has(name);
   }
+
+  hasAll(names) {
+    for(const n in names) {
+      if(!this.hasComponent(n)){
+        return false;
+      }
+    }
+    return true;
+  }
+
 }
 
 // Components for Entity-Component Pattern
@@ -88,13 +98,22 @@ class CircuitWireComponent {
 
 // Factory functions to create common entities
 class EntityFactory {
-  static createPhysicsObject(repo, x, y, mass = 1) {
-    return repo.create('physics')
-      .addComponent('transform', new TransformComponent(x, y))
-      .addComponent('physics', new PhysicsComponent(mass))
-      .addComponent('render', new RenderComponent('circle', '#3b82f6', 20))
-      .addComponent('tangible', new PhysicsCollisionComponent(20))
-      .addComponent('draggable', new MobileByUserComponent(false));
+  static createPhysicsObject(repo, x, y, mass = 1, type = "Ball") {
+    if(type === "Ball") {
+      return repo.create('physics')
+        .addComponent('transform', new TransformComponent(x, y))
+        .addComponent('physics', new PhysicsComponent(mass))
+        .addComponent('render', new RenderComponent('circle', '#3b82f6', 20))
+        .addComponent('tangible', new PhysicsCollisionComponent(20))
+        .addComponent('draggable', new MobileByUserComponent(false));
+    }
+    else if(type === "Pin") {
+      return repo.create('physics')
+        .addComponent('transform', new TransformComponent(x, y))
+        .addComponent('render', new RenderComponent('circle', '#3b82f6', 10))
+        .addComponent('tangible', new PhysicsCollisionComponent(10))
+        .addComponent('draggable', new MobileByUserComponent(false));
+    }
   }
 
   static createCircuitResistor(repo, x, y, resistance) {
@@ -118,6 +137,12 @@ class EntityFactory {
       .addComponent('wire', new CircuitWireComponent(start, end));
   }
 
+
+
 }
 
-export {Entity, EntityFactory};
+const PhysicsObjs = ["Ball", "Pin"];
+
+const CircuitObjs = ["Battery", "Wire", "Resistor", "Switch"];
+
+export {Entity, EntityFactory, PhysicsObjs, CircuitObjs};

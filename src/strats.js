@@ -31,6 +31,25 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
 
   // Collision response
   resolveCollision(entityA, entityB) {
+    var needed = ['transform', 'physics', 'tangible'];
+    
+    //ok. the way this is called from update,
+    //entity A would always have a physics component.
+    //and that's the one that is causing potential problems.
+    //so really I only need to check if B has a physics component.
+    if(!entityB.hasComponent('physics')) {
+      //somebodies missing something, or maybe both are?
+      //so entity B must be a pin, not a ball.
+      //TODO: figure this out
+      //how will that change the calculations?
+      //what code can I reuse?
+      //how do I keep this code simple, maintainable, reusable, and extendable?
+
+    }
+
+    
+    
+
     const transformA = entityA.getComponent('transform');
     const transformB = entityB.getComponent('transform');
     const physicsA = entityA.getComponent('physics');
@@ -108,10 +127,10 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
       transform.x += physics.vx * deltaTime
       transform.y += physics.vy * deltaTime;
 
-      // Simplified object collisions
+      // object collisions
       if (entity.hasComponent('tangible')) {
         entities.forEach(e => {
-          if(entity.id === e.id) {
+          if(!(entity.id === e.id) || !e.hasComponent('tangible')) {
             return;
           }
           if(this.collides(entity, e)) {

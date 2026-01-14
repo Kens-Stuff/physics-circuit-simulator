@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Plus } from 'lucide-react';
 import {BasicPhysicsSetup, PhysicsLevels, BasicCircuitSetup, CircuitLevels} from './levels.js';
-import {Entity, EntityFactory} from './factory.js';
+import {Entity, EntityFactory, PhysicsObjs, CircuitObjs} from './factory.js';
 import {SimulationStrategy, PhysicsSimulationStrategy, CircuitSimulationStrategy} from './strats.js';
 
 // ============================================================================
@@ -213,6 +213,9 @@ export default function PhysicsCircuitSimulator() {
   const [backgroundColor, setBackgroundColor] = useState('#111827');
   const [levelOptions, setLevelOptions] = useState(mode === 'physics' ? PhysicsLevels : CircuitLevels);
   const [currLevel, setCurrLevel] = useState(1);
+  const [objectOptions, setObjectOptions] = useState(mode === 'physics' ? PhysicsObjs : CircuitObjs);
+  const [CurrNewObj, setCurrNewObj] = useState(1);
+
 
   // Initialize simulation engine
   useEffect(() => {
@@ -297,7 +300,7 @@ export default function PhysicsCircuitSimulator() {
     if (!engineRef.current) return;
     
     if (mode === 'physics') {
-      EntityFactory.createPhysicsObject(engineRef.current.repository, Math.random() * 600 + 100, 50, Math.random() * 2 + 0.5);
+      EntityFactory.createPhysicsObject(engineRef.current.repository, Math.random() * 600 + 100, 50, Math.random() * 2 + 0.5, CurrNewObj);
     } else {
       const x = Math.random() * 400 + 200;
       EntityFactory.createCircuitResistor(engineRef.current.repository, x, 300, Math.random() * 200 + 50);
@@ -313,11 +316,16 @@ export default function PhysicsCircuitSimulator() {
     setIsRunning(false);
     setMode(newMode);
     setLevelOptions(newMode === 'physics' ? PhysicsLevels : CircuitLevels)
+    setObjectOptions(newMode === 'physics' ? PhysicsObjs : CircuitObjs)
     handleReset();
   };
 
   const handleLevelChange = (event) => {
     setCurrLevel(event.target.value);
+  }
+
+  const handleNewObjectChange = (event) => {
+    setCurrNewObj(event.target.value);
   }
 
   // Inline styles
@@ -477,16 +485,17 @@ export default function PhysicsCircuitSimulator() {
             <RotateCcw size={18} />
             Reset
           </button>
+          <select value={CurrNewObj} onChange={handleNewObjectChange}>
+            {objectOptions.map((l) => <option>{l}</option>)}
+          </select>
           <button
             onClick={handleAddEntity}
             style={{...styles.button, ...styles.successButton}}
           >
             <Plus size={18} />
-            Add {mode === 'physics' ? 'Object' : 'Resistor'}
+            Add {mode === 'physics' ? 'Object' : 'Element'}
           </button>
         </div>
-
-        
       </div>
 
       <div style={styles.infoPanel}>
@@ -544,6 +553,7 @@ export default function PhysicsCircuitSimulator() {
           <div><span style={{color: '#22c55e'}}>Strategy:</span> Swappable simulation algorithms</div>
           <div><span style={{color: '#a855f7'}}>Observer:</span> Renderer watches simulation changes</div>
           <div><span style={{color: '#eab308'}}>Repository:</span> Entity storage and retrieval</div>
+          <div><span style={{color: '#d33636'}}>Factory:</span> Entity creation</div>
         </div>
       </div>
     </div>
