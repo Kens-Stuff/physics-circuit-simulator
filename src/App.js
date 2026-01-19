@@ -277,6 +277,7 @@ export default function PhysicsCircuitSimulator() {
 
   const handleTogglePlay = () => {
     setIsRunning(!isRunning);
+    console.log("simulation started or stopped");
   };
 
   const handleReset = () => {
@@ -294,12 +295,15 @@ export default function PhysicsCircuitSimulator() {
 
     setEntityCount(engineRef.current.repository.getAll().length);
     rendererRef.current?.render(engineRef.current.repository.getAll());
+    console.log("simulation reset");
   };
 
   const handleAddEntity = () => {
     if (!engineRef.current) return;
+    console.log("adding an entity");
     
     if (mode === 'physics') {
+      console.debug("adding a physics entity of type: " + CurrNewObj);
       EntityFactory.createPhysicsObject(engineRef.current.repository, Math.random() * 600 + 100, 50, Math.random() * 2 + 0.5, CurrNewObj);
     } else {
       const x = Math.random() * 400 + 200;
@@ -318,14 +322,17 @@ export default function PhysicsCircuitSimulator() {
     setLevelOptions(newMode === 'physics' ? PhysicsLevels : CircuitLevels)
     setObjectOptions(newMode === 'physics' ? PhysicsObjs : CircuitObjs)
     handleReset();
+    console.log("mode changed");
   };
 
   const handleLevelChange = (event) => {
     setCurrLevel(event.target.value);
+    console.log("level selection changed");
   }
 
   const handleNewObjectChange = (event) => {
     setCurrNewObj(event.target.value);
+    console.log("new object type changed");
   }
 
   // Inline styles

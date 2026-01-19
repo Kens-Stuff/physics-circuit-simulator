@@ -31,32 +31,18 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
 
   // Collision response
   resolveCollision(entityA, entityB) {
-    var needed = ['transform', 'physics', 'tangible'];
-    
-    //ok. the way this is called from update,
-    //entity A would always have a physics component.
-    //and that's the one that is causing potential problems.
-    //so really I only need to check if B has a physics component.
-    if(!entityB.hasComponent('physics')) {
-      //somebodies missing something, or maybe both are?
-      //so entity B must be a pin, not a ball.
-      //TODO: figure this out
-      //how will that change the calculations?
-      //what code can I reuse?
-      //how do I keep this code simple, maintainable, reusable, and extendable?
-
-    }
-
-    
-    
-
     const transformA = entityA.getComponent('transform');
     const transformB = entityB.getComponent('transform');
-    const physicsA = entityA.getComponent('physics');
-    const physicsB = entityB.getComponent('physics');
     const tangibleA = entityA.getComponent('tangible');
     const tangibleB = entityB.getComponent('tangible');
 
+    // Calculate restitution (bounciness) - 1.0 = perfectly elastic
+    // eventually add capacity to calculate based on entities involved.
+    const restitution = 1.0;
+    
+    const physicsA = entityA.getComponent('physics');
+    const physicsB = entityB.getComponent('physics');
+   
     // Calculate collision normal (direction from A to B)
     const dx = transformB.x - transformA.x;
     const dy = transformB.y - transformA.y;
@@ -65,7 +51,7 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
     // Avoid division by zero
     if (distance === 0) return;
 
-    // Normalize the collision normal
+    // Normalize the collision normal.
     const nx = dx / distance;
     const ny = dy / distance;
 
@@ -74,37 +60,81 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
     const separationX = nx * overlap * 0.5;
     const separationY = ny * overlap * 0.5;
 
-    transformA.x -= separationX;
-    transformA.y -= separationY;
-    transformB.x += separationX;
-    transformB.y += separationY;
+    //UP to this point, it hasn't mattered if one of the objects is immobile.
+    //now it matters.
+    //an immobile object has no physics component, and so has no velocity to change.
+    // it also should not be transformed during seperation.
+    //so, do I have everything that would use that check seperately? do I have there be one check?
+    //do I migrate to another helper function?
+    //ok. the way this is called from update,
+    //entity A would always have a physics component.
+    //and that's the one that is causing potential problems.
+    //so really I only need to check if B has a physics component.
+    //BUT THAT MAY NOT ALWAYS BE THE CASE
+    //but for now, going to check once.
+    if(!entityB.hasComponent('physics')) {
+      //TODO: I broke it i broke it i broke it.
+      // I don't know what happened. it thinks collisions happen continuously, and actual collisions aren't doing anything anymore.
+      // AND THAT'S NOT EVEN COLLISIONS WITH A PIN!! THATS BALL ON BALL COLLISIONS.
+      //
+      //somebodies missing something, or maybe both are?
+      //so entity B must be a pin, not a ball, at least right now those are the only options.
+      
+      console.log("collision with an imobile entity");
+      //since b can't move, A must move twice as far.
+      transformA.x -= separationX * 2;
+      transformA.y -= separationY * 2;
 
-    // Calculate relative velocity
-    const relativeVelocityX = physicsB.vx - physicsA.vx;
-    const relativeVelocityY = physicsB.vy - physicsA.vy;
+      //calculate relative velocity. its, just the velocities of A, so normalize that.
+      const velocityAlongNormal = (0 - physicsA.vx) * nx + (0 - physicsA.vy) * ny;
 
-    // Calculate relative velocity along collision normal
-    const velocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
+      // Don't resolve if velocities are separating
+      if (velocityAlongNormal > 0) return;
 
-    // Don't resolve if velocities are separating
-    if (velocityAlongNormal > 0) return;
+      // Calculate impulse scalar
+      const impulse = -(1 + restitution) * velocityAlongNormal;
+      //impulse scalar not needed, as entityB is fixed. all impulse is absorbed by A.
+      /*const totalMass = physicsA.mass + physicsB.mass;
+      const impulseScalar = impulse / totalMass;*/
 
-    // Calculate restitution (bounciness) - 1.0 = perfectly elastic
-    const restitution = 1.0;
+      // Apply impulse to velocities
+      const impulseX = impulse * nx;
+      const impulseY = impulse * ny;
 
-    // Calculate impulse scalar
-    const impulse = -(1 + restitution) * velocityAlongNormal;
-    const totalMass = physicsA.mass + physicsB.mass;
-    const impulseScalar = impulse / totalMass;
+      physicsA.vx -= impulseX; // * physicsB.mass; //entity B has no mass for how it changes the impulse to A. for how it gets moved its more like it has infinite mass.
+      physicsA.vy -= impulseY; // * physicsB.mass;
 
-    // Apply impulse to velocities
-    const impulseX = impulseScalar * nx;
-    const impulseY = impulseScalar * ny;
+    } else {
+      console.log("collision between two mobile entities");
+      transformA.x -= separationX;
+      transformA.y -= separationY;
+      transformB.x += separationX;
+      transformB.y += separationY;
 
-    physicsA.vx -= impulseX * physicsB.mass;
-    physicsA.vy -= impulseY * physicsB.mass;
-    physicsB.vx += impulseX * physicsA.mass;
-    physicsB.vy += impulseY * physicsA.mass;
+      // Calculate relative velocity
+      const relativeVelocityX = physicsB.vx - physicsA.vx;
+      const relativeVelocityY = physicsB.vy - physicsA.vy;
+
+      // Calculate relative velocity along collision normal
+      const velocityAlongNormal = relativeVelocityX * nx + relativeVelocityY * ny;
+
+      // Don't resolve if velocities are separating
+      if (velocityAlongNormal > 0) return;
+
+      // Calculate impulse scalar
+      const impulse = -(1 + restitution) * velocityAlongNormal;
+      const totalMass = physicsA.mass + physicsB.mass;
+      const impulseScalar = impulse / totalMass;
+
+      // Apply impulse to velocities
+      const impulseX = impulseScalar * nx;
+      const impulseY = impulseScalar * ny;
+
+      physicsA.vx -= impulseX * physicsB.mass;
+      physicsA.vy -= impulseY * physicsB.mass;
+      physicsB.vx += impulseX * physicsA.mass;
+      physicsB.vy += impulseY * physicsA.mass;
+    }
   }
 
   update(entities, deltaTime) {
@@ -127,7 +157,8 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
       transform.x += physics.vx * deltaTime
       transform.y += physics.vy * deltaTime;
 
-      // object collisions
+      // object collisions 
+      // TODO: I don't know whats happening, collisions are broken.
       if (entity.hasComponent('tangible')) {
         entities.forEach(e => {
           if(!(entity.id === e.id) || !e.hasComponent('tangible')) {
@@ -135,6 +166,7 @@ class PhysicsSimulationStrategy extends SimulationStrategy {
           }
           if(this.collides(entity, e)) {
             //handle collision.
+            console.log("collision detected");
             this.resolveCollision(entity, e);
           }
         })

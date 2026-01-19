@@ -19,7 +19,7 @@ class BasicPhysicsSetup extends LevelSetup {
   }
 }
 
-const CircuitLevels = [1];
+const CircuitLevels = [1, 2];
 
 class BasicCircuitSetup extends LevelSetup {
   initialize(repo) {

@@ -6,16 +6,14 @@ I am glad to finally be making this a reality, though for it to be a reasonable 
 
 TODO:
 General:
-  host the simulators on a website
   prepare examples of different situations
   develop a sort of lesson curriculum
 Physics:
-  better gravity
-  collisions
+  Multiple object types - maintain collisions.
 Circuits:
-  visible wires
   able to move components
   ensure correct circuit behavior
+    reconstruct circuit solving process
 
 
 
